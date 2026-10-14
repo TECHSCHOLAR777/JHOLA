@@ -2,7 +2,7 @@
 
 Jhola is a personal web agent for people who order groceries on **Blinkit, Zepto and Swiggy Instamart**. You type one list in plain words, Hinglish included (`doodh 2 packet, atta 5kg, maggi 4, dhaniya`). TinyFish agents read live prices on all three apps, and Jhola works out the cheapest way to buy the whole list **after delivery, small-cart and handling fees**. Sometimes that's one app, sometimes a split. Then Jhola fills the real carts on your logged-in accounts and **stops at the payment page**. You approve the plan and pay with your own UPI. Jhola never pays.
 
-**Who it's for:** a parent who orders household groceries every week and doesn't compare three apps by hand. A family member connects the apps once, and after that the parent only uses Jhola.
+**Who it's for:** Any elderly person who orders household groceries every week and doesn't compare three apps by hand. A family member connects the apps once, and after that the parent only uses Jhola.
 
 It also includes:
 - **Order:** "2 Vaseline lip balm from Blinkit". It finds the product, asks once ("is this it?"), and stops searching the moment you say yes.
