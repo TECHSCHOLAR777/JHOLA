@@ -63,30 +63,4 @@ Without a connected app, Jhola still compares prices using your PIN code. It jus
 | Stream drops | Backend polls `GET /v1/runs/{id}` until the run finishes |
 | Cart total ≠ plan | Shown side by side; you're asked again before paying |
 
-## Not in this build
-- Automatic payment (by design: you pay).
-- BigBasket / Flipkart Minutes.
-- Card offers and coupons.
-- Multiple households.
-- An LLM list parser (the rule-based parser handles common Hinglish).
 
-Data stays local in `data/`.
-
----
-
-## Posts (tag TinyFish)
-
-**LinkedIn**
-
-> I built **Jhola**, a personal agent that does my family's weekly grocery comparison.
->
-> You type one list, even in Hinglish ("doodh 2 packet, atta 5kg, maggi 4"). @TinyFish agents check Blinkit, Zepto and Instamart live, in parallel, and you can watch all three browsers on screen. Jhola then works out the cheapest basket *after* delivery, handling and small-cart fees. Sometimes that's one app, sometimes a split.
->
-> You approve the plan, it fills the real carts, and it stops at the payment page. My parents pay with their own UPI. Nothing is bought without a yes.
->
-> Built on TinyFish Agent, Browser, Browser Context Profiles, Search and Fetch. #TinyFish #AIagents #BuildInPublic
-
-**X**
-
-> Built Jhola 🛍️ One grocery list → @TinyFish agents check Blinkit, Zepto & Instamart live → cheapest basket after fees → fills the carts and stops at payment. You pay, it never does.
-> Hinglish works: "doodh 2 packet, atta 5kg" #TinyFish
