@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "errand", "runtimeExecutable": "zsh", "runtimeArgs": ["-c", "eval \"$(grep '^export TINYFISH_API_KEY' ~/.zshrc)\"; exec node server.js"], "port": 4321 }
+  ]
+}

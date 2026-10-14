@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Errand</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐟</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#order"><span class="logo">🐟</span><span class="name">errand</span></a>
+    <nav class="tabs" id="tabs">
+      <button data-tab="order" class="active">Order</button>
+      <button data-tab="price" class="adv">Compare</button>
+      <button data-tab="watch" class="adv">Watch</button>
+      <button data-tab="form" class="adv">Forms</button>
+      <button data-tab="history">History</button>
+      <button data-tab="me">Me</button>
+    </nav>
+    <div class="status" id="status" title="TinyFish connection"><span class="dot"></span><span></span></div>
+  </header>
+
+  <main>
+    <!-- ORDER (home) -->
+    <section class="panel active" id="tab-order">
+      <div class="hero">
+        <h1 id="hello">What do you need today?</h1>
+        <p class="lede">Just type it like you'd say it. I'll find it and check with you before anything else happens.</p>
+      </div>
+      <div class="banner hidden" id="needInfo">📍 Add your name, phone and address in <a href="#me">Me</a> so I know where to deliver.</div>
+      <form id="orderForm" class="ask">
+        <textarea name="text" rows="3" maxlength="500" placeholder="e.g. I want 2 Amul butter and a dozen eggs from Blinkit"></textarea>
+        <div class="ask-foot">
+          <div class="plan" id="orderPlan"></div>
+          <button class="primary big" type="submit">Find it →</button>
+        </div>
+      </form>
+      <div class="chips" id="orderExamples">
+        <button type="button">Vaseline lip balm from Blinkit</button>
+        <button type="button">2 Parle-G and 1 Amul milk 500ml</button>
+        <button type="button">Dolo 650 from Tata 1mg</button>
+      </div>
+      <div id="orderRun"></div>
+    </section>
+
+    <!-- PRICE HUNT -->
+    <section class="panel" id="tab-price">
+      <div class="hero"><h1>Compare prices</h1>
+        <p class="lede">I'll open each store live, read the real price and stock, and screenshot the winner. I never buy anything.</p></div>
+      <form class="card form" id="priceForm">
+        <label class="grow">Product <input name="product" placeholder="Sony WH-1000XM5, iPhone 16 128GB…" required /></label>
+        <label>Country
+          <select name="country">
+            <option value="IN" selected>India</option><option value="US">United States</option><option value="GB">United Kingdom</option>
+            <option value="CA">Canada</option><option value="DE">Germany</option><option value="AU">Australia</option><option value="JP">Japan</option><option value="FR">France</option>
+          </select>
+        </label>
+        <label>Stores <select name="maxStores"><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></label>
+        <label>Target price <span class="opt">optional</span><input name="targetPrice" type="number" min="0" placeholder="18000" /></label>
+        <label class="grow">Only these stores <span class="opt">optional</span><input name="stores" placeholder="blinkit, zepto, amazon" /></label>
+        <label>PIN code <span class="opt">optional</span><input name="pin" inputmode="numeric" maxlength="6" placeholder="110042" /></label>
+        <div class="actions"><span class="estimate" id="priceEstimate"></span><button class="primary" type="submit">Compare →</button></div>
+        <div class="chips">
+          <button type="button" data-fill='{"product":"Sony WH-1000XM5","country":"IN"}'>Sony WH-1000XM5</button>
+          <button type="button" data-fill='{"product":"Vaseline Lip Care Original","country":"IN","stores":"blinkit, zepto, amazon","pin":"110042"}'>Lip balm on Blinkit/Zepto</button>
+          <button type="button" data-fill='{"product":"Kindle Paperwhite 16GB","country":"US"}'>Kindle (US)</button>
+        </div>
+      </form>
+      <div id="priceRun"></div>
+    </section>
+
+    <!-- WATCH -->
+    <section class="panel" id="tab-watch">
+      <div class="hero"><h1>Watch for changes</h1>
+        <p class="lede">A page (notices, results, a price) or a topic (internships, news). I'll check on a schedule and show what changed.</p></div>
+      <form class="card form" id="watchForm">
+        <div class="seg" id="watchKind"><button type="button" class="on" data-kind="page">A page</button><button type="button" data-kind="topic">A topic</button></div>
+        <label class="grow kind-page">Page URL <input name="url" placeholder="https://dtu.ac.in/" /></label>
+        <label class="grow kind-topic hidden">Topic <input name="query" placeholder="software internship Delhi 2026" /></label>
+        <label class="grow">What change matters? <input name="purpose" placeholder="A new exam or result notice is posted" /></label>
+        <label>Name <input name="name" placeholder="DTU notices" /></label>
+        <label>Check
+          <select name="schedule"><option value="hourly">Every hour</option><option value="every6h">Every 6 hours</option><option value="daily9" selected>Daily, 9am</option><option value="weekdays9">Weekdays, 9am</option><option value="weekly">Weekly</option></select>
+        </label>
+        <div class="actions"><span class="estimate">Free to run.</span><button class="primary" type="submit">Start watching →</button></div>
+        <div class="chips">
+          <button type="button" data-watch='{"kind":"page","url":"https://dtu.ac.in/","name":"DTU notices","purpose":"A new notice, exam schedule, or result is posted"}'>DTU notices</button>
+          <button type="button" data-watch='{"kind":"topic","query":"software engineering internship India apply 2026","name":"SWE internships","purpose":"A new internship opening I can apply to","schedule":"every6h"}'>New internships</button>
+        </div>
+      </form>
+      <div id="watchResult"></div>
+      <h2 class="sub">Your watches</h2>
+      <div id="watchList" class="grid"></div>
+    </section>
+
+    <!-- FORM FILL -->
+    <section class="panel" id="tab-form">
+      <div class="hero"><h1>Fill a form</h1>
+        <p class="lede">I read the form first <b>without typing anything</b>, fill it from your details in <a href="#me">Me</a>, and submit only after you approve. I never fill passwords, OTPs, card or ID numbers.</p></div>
+      <form class="card form" id="formForm">
+        <label class="grow">Form URL <input name="url" placeholder="https://forms.gle/…" required /></label>
+        <label class="grow">Anything I should know? <span class="opt">optional</span><input name="instructions" placeholder="Saturday slot, T-shirt size M" /></label>
+        <div class="actions"><span class="estimate">Usually under $0.40</span><button class="primary" type="submit">Read the form →</button></div>
+        <div class="chips"><button type="button" data-fill-form='{"url":"https://httpbin.org/forms/post","instructions":"Large pizza with bacon and extra cheese, deliver at 19:30, ring the bell twice"}'>Test pizza form</button></div>
+      </form>
+      <div id="formRun"></div>
+    </section>
+
+    <!-- HISTORY -->
+    <section class="panel" id="tab-history">
+      <div class="hero"><h1>History</h1><p class="lede">Everything I've done for you, and what it cost.</p></div>
+      <div id="historyList"></div>
+      <div id="historyRun"></div>
+    </section>
+
+    <!-- ME -->
+    <section class="panel" id="tab-me">
+      <div class="hero"><h1>Me</h1><p class="lede">Saved only on this computer, in <code>data/</code>. Used to deliver your orders and fill forms.</p></div>
+
+      <form class="card" id="meForm">
+        <h3>Your details</h3>
+        <div class="fgrid">
+          <label>Full name <input name="full_name" autocomplete="name" /></label>
+          <label>Phone <input name="phone" inputmode="tel" autocomplete="tel" /></label>
+          <label>Email <span class="opt">optional</span><input name="email" type="email" autocomplete="email" /></label>
+          <label class="wide">House / flat, street <input name="address_line1" autocomplete="address-line1" /></label>
+          <label class="wide">Area / locality <input name="address_line2" autocomplete="address-line2" /></label>
+          <label>Landmark <span class="opt">optional</span><input name="landmark" /></label>
+          <label>City <input name="city" autocomplete="address-level2" /></label>
+          <label>State <input name="state" autocomplete="address-level1" /></label>
+          <label>PIN code <input name="pincode" inputmode="numeric" maxlength="6" autocomplete="postal-code" /></label>
+        </div>
+        <details class="extra"><summary>More details for forms (college, roll number…)</summary><div id="extraRows"></div><button type="button" class="ghost" id="addExtra">+ Add a detail</button></details>
+        <div class="actions"><span class="estimate">Passwords, OTPs, card and ID numbers are never stored.</span><button class="primary" type="submit">Save my details</button></div>
+      </form>
+
+      <div class="card" id="careCard">
+        <h3>👵 Caretaker settings</h3>
+        <p class="small">For a parent or grandparent: choose where orders go when they don't name a store, and keep the app simple.</p>
+        <div id="careLocked" class="hidden">
+          <div class="row"><input id="careUnlockPin" type="password" inputmode="numeric" maxlength="6" placeholder="Caretaker PIN" /><button type="button" class="primary" id="careUnlock">Unlock</button></div>
+        </div>
+        <div id="careBody">
+          <label class="lbl">Default stores <span class="opt">tap in order of preference, up to 4</span></label>
+          <div class="chips pick" id="careStores"></div>
+          <div class="fgrid">
+            <label>Caretaker name <input id="careName" placeholder="e.g. Priya" /></label>
+            <label>Caretaker phone <input id="carePhone" inputmode="tel" /></label>
+            <label>Set a PIN <span class="opt">4–6 digits, optional</span><input id="careNewPin" type="password" inputmode="numeric" maxlength="6" /></label>
+          </div>
+          <label class="toggle"><input type="checkbox" id="careSimple" /> <span>Simple mode: big text, only Order, History and Me</span></label>
+          <div class="actions"><button type="button" class="primary" id="careSave">Save caretaker settings</button></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>Made with 🧡 on <a href="https://tinyfish.ai" target="_blank" rel="noopener">TinyFish</a> · I always ask before anything is bought, booked or sent.</footer>
+
+  <dialog id="confirm">
+    <form method="dialog">
+      <h3 id="confirmTitle"></h3>
+      <div id="confirmBody"></div>
+      <div class="actions"><button value="no">Cancel</button><button value="yes" class="primary" id="confirmYes">Continue</button></div>
+    </form>
+  </dialog>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
