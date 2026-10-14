@@ -1,4 +1,4 @@
-// Errand — a personal web-errand agent powered by TinyFish.
+// Jhola — one grocery list, three apps, the cheapest real basket (plus Order, Compare and Forms). Powered by TinyFish.
 import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
@@ -16,12 +16,15 @@ const jobs = await import('./lib/jobs.js');
 const tf = await import('./lib/tinyfish.js');
 const { priceHunt } = await import('./lib/chores/priceHunt.js');
 const { formFill } = await import('./lib/chores/formFill.js');
-const watch = await import('./lib/chores/watch.js');
 const { isSensitiveField } = await import('./lib/safety.js');
 const { order } = await import('./lib/chores/order.js');
 const { parseOrder } = await import('./lib/orderParse.js');
 const { ORDER_STORES, STORE_NAMES } = await import('./lib/stores.js');
 const crypto = await import('node:crypto');
+const { jhola, knownFees } = await import('./lib/basket/jhola.js');
+const { parseList } = await import('./lib/basket/parse.js');
+const accounts = await import('./lib/accounts.js');
+const { APPS, APP_NAMES } = await import('./public/lib/basket.js');
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -37,6 +40,7 @@ const CHORES = {
   price_hunt: { run: priceHunt, title: (i) => `Price hunt: ${i.product}` },
   form_fill: { run: formFill, title: (i) => `Form fill: ${hostOf(i.url)}` },
   order: { run: order, title: (i) => `Order: ${i.text.slice(0, 60)}` },
+  jhola: { run: jhola, title: (i) => `Jhola: ${i.items.map((x) => x.name).join(', ').slice(0, 60)}` },
 };
 const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
 
@@ -65,6 +69,43 @@ app.post('/api/form-fill', wrap((req, res) => {
   if (!/^https?:\/\//.test(req.body.url || '')) return res.status(400).json({ error: 'A full https:// form URL is required' });
   res.json(startChore('form_fill', req.body));
 }));
+
+// ---- Jhola: one list, three apps ----
+app.post('/api/jhola/parse', (req, res) => res.json({ items: parseList(String(req.body.text || '').slice(0, 2000)) }));
+app.post('/api/jhola', wrap((req, res) => {
+  const items = (Array.isArray(req.body.items) ? req.body.items : []).slice(0, 25).map((i) => ({
+    id: String(i.id || crypto.randomUUID().slice(0, 8)).slice(0, 12),
+    name: String(i.name || '').trim().slice(0, 80),
+    quantity: Math.max(1, Math.min(Number(i.quantity) || 1, 50000)),
+    unit: ['g', 'ml', 'pc'].includes(i.unit) ? i.unit : 'pc',
+    brand: i.brand ? String(i.brand).trim().toLowerCase().slice(0, 40) : null,
+    allowSubstitute: i.allowSubstitute !== false,
+  })).filter((i) => i.name);
+  if (!items.length) return res.status(400).json({ error: 'Add at least one item.' });
+  const apps = (req.body.apps || APPS).filter((a) => APPS.includes(a));
+  if (!apps.length) return res.status(400).json({ error: 'Pick at least one app.' });
+  const pincode = readJSON('profile.json', {}).pincode || '';
+  const job = jobs.runChore('jhola', { items, apps, pincode }, CHORES.jhola.title({ items }), jhola);
+  res.json({ id: job.id });
+}));
+app.get('/api/jhola/fees', (_req, res) => res.json(knownFees()));
+
+// ---- Setup: connected apps (log in once, India-proxy profiles) ----
+app.get('/api/accounts', (_req, res) => {
+  const acc = accounts.listAccounts();
+  res.json(APPS.map((a) => ({ app: a, name: APP_NAMES[a], connected: !!acc[a]?.connectedAt, expired: !!acc[a]?.expired, connectedAt: acc[a]?.connectedAt || null })));
+});
+app.post('/api/accounts/:app/open', wrap(async (req, res) => {
+  // purpose "pay": the same window, opened on the shopper's own logged-in session so they can pay themselves.
+  res.json(await accounts.openWindow(req.params.app, { purpose: req.body.purpose === 'pay' ? 'pay' : 'login' }));
+}));
+app.get('/api/accounts/window/:sid/frame', wrap(async (req, res) => {
+  const { buf, url } = await accounts.frame(req.params.sid);
+  res.set({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store', 'X-Page-Url': encodeURI(url) }).send(buf);
+}));
+app.post('/api/accounts/window/:sid/input', wrap(async (req, res) => res.json(await accounts.input(req.params.sid, req.body || {}))));
+app.post('/api/accounts/window/:sid/close', wrap(async (req, res) => res.json(await accounts.closeWindow(req.params.sid, !!req.body.save))));
+app.delete('/api/accounts/:app', wrap(async (req, res) => res.json(await accounts.disconnect(req.params.app))));
 
 // ---- order (one text box) ----
 app.post('/api/order/parse', (req, res) => {
@@ -148,15 +189,8 @@ app.put('/api/profile', (req, res) => {
   res.json(clean);
 });
 
-// ---- watches (TinyFish Monitor) ----
-app.get('/api/watches', wrap(async (_req, res) => res.json(await watch.listWatches())));
-app.post('/api/watches', wrap(async (req, res) => res.json(await watch.createWatch(req.body))));
-app.post('/api/watches/:id/check', wrap(async (req, res) => res.json(await watch.checkNow(req.params.id))));
-app.patch('/api/watches/:id', wrap(async (req, res) => res.json(await watch.pauseWatch(req.params.id, !!req.body.paused))));
-app.delete('/api/watches/:id', wrap(async (req, res) => res.json(await watch.deleteWatch(req.params.id))));
-
 const PORT = Number(process.env.PORT) || 4321;
 app.listen(PORT, '127.0.0.1', () => {
-  console.log(`\n  🐟 Errand is running → http://localhost:${PORT}\n`);
+  console.log(`\n  🛍️  Jhola is running → http://localhost:${PORT}\n`);
   if (!process.env.TINYFISH_API_KEY) console.log('  ⚠  TINYFISH_API_KEY is not set — add it to .env\n');
 });

@@ -1,7 +1,7 @@
 {
-  "name": "errand",
+  "name": "jhola",
   "version": "1.0.0",
-  "description": "",
+  "description": "One grocery list, three apps, the cheapest real basket — a TinyFish personal agent",
   "main": "index.js",
   "scripts": {
     "test": "node --test test/",

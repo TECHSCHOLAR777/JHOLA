@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Errand</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐟</text></svg>" />
+  <title>Jhola</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛍️</text></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
@@ -12,13 +12,14 @@
 </head>
 <body>
   <header class="top">
-    <a class="brand" href="#order"><span class="logo">🐟</span><span class="name">errand</span></a>
+    <a class="brand" href="#jhola"><span class="logo">🛍️</span><span class="name">jhola</span></a>
     <nav class="tabs" id="tabs">
-      <button data-tab="order" class="active">Order</button>
+      <button data-tab="jhola" class="active">Basket</button>
+      <button data-tab="order">Order</button>
       <button data-tab="price" class="adv">Compare</button>
-      <button data-tab="watch" class="adv">Watch</button>
       <button data-tab="form" class="adv">Forms</button>
       <button data-tab="history">History</button>
+      <button data-tab="setup">Setup</button>
       <button data-tab="me">Me</button>
     </nav>
     <div class="status" id="status" title="TinyFish connection"><span class="dot"></span><span></span></div>
@@ -26,7 +27,31 @@
 
   <main>
     <!-- ORDER (home) -->
-    <section class="panel active" id="tab-order">
+    <!-- JHOLA (home) -->
+    <section class="panel active" id="tab-jhola">
+      <div class="hero">
+        <h1>One list. Three apps.<br><span class="hl">The cheapest real basket.</span></h1>
+        <p class="lede">Type your list the way you'd say it. I check Blinkit, Zepto and Instamart live, add up delivery, small-cart and handling fees, and find the cheapest way to buy it all. Nothing goes in a cart until you approve, and you pay yourself.</p>
+      </div>
+      <div class="banner hidden" id="jNeedSetup">🔑 Connect your apps in <a href="#setup">Setup</a> once so I can see your prices and fill your carts. Without it I use your PIN code and can only compare.</div>
+      <form id="jForm" class="ask">
+        <textarea name="text" rows="3" maxlength="2000" placeholder="doodh 2 packet, atta 5kg, maggi 4, dhaniya"></textarea>
+        <div id="jItems"></div>
+        <div class="ask-foot">
+          <div class="plan" id="jApps"></div>
+          <button class="primary big" type="submit">Find cheapest basket →</button>
+        </div>
+      </form>
+      <div class="chips" id="jExamples">
+        <button type="button">doodh 2 packet, atta 5kg, maggi 4, dhaniya</button>
+        <button type="button">amul butter 100g, 1 dozen ande, pyaz 2 kg, tamatar 1kg</button>
+        <button type="button">sirf aashirvaad atta 10 kg, cheeni 1kg, chai patti 250g</button>
+      </div>
+      <div id="jRun"></div>
+    </section>
+
+    <!-- ORDER -->
+    <section class="panel" id="tab-order">
       <div class="hero">
         <h1 id="hello">What do you need today?</h1>
         <p class="lede">Just type it like you'd say it. I'll find it and check with you before anything else happens.</p>
@@ -73,30 +98,6 @@
       <div id="priceRun"></div>
     </section>
 
-    <!-- WATCH -->
-    <section class="panel" id="tab-watch">
-      <div class="hero"><h1>Watch for changes</h1>
-        <p class="lede">A page (notices, results, a price) or a topic (internships, news). I'll check on a schedule and show what changed.</p></div>
-      <form class="card form" id="watchForm">
-        <div class="seg" id="watchKind"><button type="button" class="on" data-kind="page">A page</button><button type="button" data-kind="topic">A topic</button></div>
-        <label class="grow kind-page">Page URL <input name="url" placeholder="https://dtu.ac.in/" /></label>
-        <label class="grow kind-topic hidden">Topic <input name="query" placeholder="software internship Delhi 2026" /></label>
-        <label class="grow">What change matters? <input name="purpose" placeholder="A new exam or result notice is posted" /></label>
-        <label>Name <input name="name" placeholder="DTU notices" /></label>
-        <label>Check
-          <select name="schedule"><option value="hourly">Every hour</option><option value="every6h">Every 6 hours</option><option value="daily9" selected>Daily, 9am</option><option value="weekdays9">Weekdays, 9am</option><option value="weekly">Weekly</option></select>
-        </label>
-        <div class="actions"><span class="estimate">Free to run.</span><button class="primary" type="submit">Start watching →</button></div>
-        <div class="chips">
-          <button type="button" data-watch='{"kind":"page","url":"https://dtu.ac.in/","name":"DTU notices","purpose":"A new notice, exam schedule, or result is posted"}'>DTU notices</button>
-          <button type="button" data-watch='{"kind":"topic","query":"software engineering internship India apply 2026","name":"SWE internships","purpose":"A new internship opening I can apply to","schedule":"every6h"}'>New internships</button>
-        </div>
-      </form>
-      <div id="watchResult"></div>
-      <h2 class="sub">Your watches</h2>
-      <div id="watchList" class="grid"></div>
-    </section>
-
     <!-- FORM FILL -->
     <section class="panel" id="tab-form">
       <div class="hero"><h1>Fill a form</h1>
@@ -115,6 +116,13 @@
       <div class="hero"><h1>History</h1><p class="lede">Everything I've done for you, and what it cost.</p></div>
       <div id="historyList"></div>
       <div id="historyRun"></div>
+    </section>
+
+    <!-- SETUP -->
+    <section class="panel" id="tab-setup">
+      <div class="hero"><h1>Setup</h1><p class="lede">Connect each app once. You log in with your own phone number and OTP inside a secure TinyFish browser (India), and set your delivery address there. I save the session, never your OTP.</p></div>
+      <div class="grid3" id="setupApps"></div>
+      <div class="card small">💡 After logging in, check the delivery address at the top of the app is yours, then press <b>Save & close</b>. If an app logs you out later, I'll tell you and you can reconnect here.</div>
     </section>
 
     <!-- ME -->
@@ -159,7 +167,7 @@
     </section>
   </main>
 
-  <footer>Made with 🧡 on <a href="https://tinyfish.ai" target="_blank" rel="noopener">TinyFish</a> · I always ask before anything is bought, booked or sent.</footer>
+  <footer>Jhola · made with 🧡 on <a href="https://tinyfish.ai" target="_blank" rel="noopener">TinyFish</a> · I always ask before anything is bought, booked or sent.</footer>
 
   <dialog id="confirm">
     <form method="dialog">
@@ -167,6 +175,20 @@
       <div id="confirmBody"></div>
       <div class="actions"><button value="no">Cancel</button><button value="yes" class="primary" id="confirmYes">Continue</button></div>
     </form>
+  </dialog>
+  <dialog id="win" class="win">
+    <div class="win-head"><b id="winTitle">Log in</b><span class="small" id="winUrl"></span></div>
+    <div class="win-body"><img id="winImg" tabindex="0" alt="Remote browser — click and type here" /></div>
+    <div class="win-ctrl">
+      <input id="winText" placeholder="Type phone number / OTP / text, then Send" autocomplete="off" />
+      <button type="button" id="winSend">Send</button>
+      <button type="button" data-key="Enter">Enter ⏎</button>
+      <button type="button" data-key="Backspace">⌫</button>
+      <button type="button" data-scroll="-500">↑</button>
+      <button type="button" data-scroll="500">↓</button>
+      <button type="button" data-back>← Back</button>
+    </div>
+    <div class="actions"><span class="estimate" id="winHint">Click on the screen to tap. Keys you press while the screen is focused are typed too.</span><button type="button" class="ghost danger" id="winCancel">Cancel</button><button type="button" class="primary" id="winSave">Save & close</button></div>
   </dialog>
   <script src="/app.js" type="module"></script>
 </body>

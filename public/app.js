@@ -1,4 +1,5 @@
-// Errand UI — vanilla JS, no build step.
+// Jhola UI — vanilla JS, no build step.
+import { optimise, APPS, APP_NAMES, feesFor } from '/lib/basket.js';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -27,12 +28,13 @@ const formData = (f) => Object.fromEntries(new FormData(f).entries());
 
 // ---------- tabs ----------
 function show(tab) {
-  if (document.body.classList.contains('simple') && ['price', 'watch', 'form'].includes(tab)) tab = 'order';
+  if (document.body.classList.contains('simple') && ['price', 'form', 'order'].includes(tab)) tab = 'order';
   $$('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   $$('.panel').forEach((p) => p.classList.toggle('active', p.id === `tab-${tab}`));
   if (tab === 'history') loadHistory();
-  if (tab === 'watch') loadWatches();
   if (tab === 'me') loadMe();
+  if (tab === 'setup') loadSetup();
+  if (tab === 'jhola') loadAccounts().then(renderAppToggles);
   history.replaceState(null, '', `#${tab}`);
 }
 $$('#tabs button').forEach((b) => b.addEventListener('click', () => show(b.dataset.tab)));
@@ -53,6 +55,7 @@ const STAGES = {
   price_hunt: [['search', 'Search'], ['triage', 'Fetch triage'], ['agents', 'Live agents'], ['proof', 'Browser proof'], ['done', 'Result']],
   form_fill: [['dryrun', 'Read form'], ['review', 'Your approval'], ['submit', 'Fill & submit'], ['done', 'Result']],
   order: [['find', 'Searching'], ['confirm', 'Your OK'], ['done', 'Ready']],
+  jhola: [['collect', 'Live prices'], ['plan', 'Your plan'], ['fill', 'Fill carts'], ['check', 'Check totals'], ['done', 'Pay']],
 };
 let activeStreams = new Map();
 
@@ -71,6 +74,7 @@ function mountRun(container, jobId) {
       state.job.events.push(ev);
       trackLive(state, ev);
       if (ev.kind === 'usage') { state.job.usage = ev.usage; state.job.cost = ev.cost; }
+      if (ev.kind === 'update') Object.assign(state.job, ev.patch);
       if (ev.kind === 'approval') { state.job.status = 'awaiting_approval'; state.job.approval = ev.approval; }
       if (ev.kind === 'approval_answer') { state.job.status = 'running'; state.job.approval = { ...state.job.approval, answered: ev.approved ? 'approved' : 'declined' }; }
       if (ev.kind === 'done') { state.job.status = ev.status; state.job.result = ev.result; state.job.cost = ev.cost; es.close(); loadStatus(); }
@@ -105,7 +109,8 @@ function render(container, state) {
   const statusLabel = { running: 'Running', done: 'Done', partial: 'Partial', failed: 'Failed', cancelled: 'Cancelled', needs_input: 'Needs you', awaiting_approval: 'Waiting for you', interrupted: 'Interrupted' }[j.status] || j.status;
 
   // Keep the live iframe stable across re-renders (don't reload the stream).
-  const prevFrame = $('iframe', container);
+  const prevFrame = $('.live iframe', container);
+  const prevFrames = new Map($$('.apanel iframe', container).map((f) => [f.dataset.src, f]));
   const prevApproval = $('.approval', container);
   const prevBehind = $('details.behind', container);
   if (prevBehind) state.behindOpen = prevBehind.open;
@@ -125,7 +130,8 @@ function render(container, state) {
     <div id="approvalSlot"></div>
     <div id="resultSlot"></div>
     ${isOrder && j.status === 'running' ? `<div class="card thinking"><span class="fish">🐟</span><div><b>On it…</b><div class="small">${esc(latest?.msg || 'Starting')}</div></div></div>` : ''}
-    <details class="behind" ${!isOrder || state.behindOpen ? 'open' : ''}><summary>${isOrder ? 'See what the agent is doing' : 'Live view & activity'}</summary>
+    ${j.type === 'jhola' && j.basket ? panelsHtml(j, state, finished) : ''}
+    <details class="behind" ${!isOrder && j.type !== 'jhola' || state.behindOpen ? 'open' : ''}><summary>${isOrder ? 'See what the agent is doing' : 'Live view & activity'}</summary>
     <div class="split">
       <div class="card live">
         <div class="live-head">Live browser ${liveUrl && !finished ? `<a href="${esc(liveUrl)}" target="_blank" rel="noopener" style="margin-left:auto;order:9">Pop out ↗</a>` : ''} ${[...state.live.keys()].map((t) => `<button data-live="${esc(t)}" class="${t === state.liveTag ? 'on' : ''}">${esc(t)}</button>`).join('')}</div>
@@ -135,6 +141,11 @@ function render(container, state) {
     </div></details>
   </div>`;
 
+  // Re-use live iframes in the three app panels so streams don't reload.
+  $$('.pframe', container).forEach((ph) => {
+    const src = ph.dataset.src; const old = prevFrames.get(src);
+    if (old) ph.replaceWith(old); else { const f = document.createElement('iframe'); f.src = src; f.dataset.src = src; f.title = 'Live agent browser'; ph.replaceWith(f); }
+  });
   const slot = $('.frame-slot', container);
   if (slot) {
     if (prevFrame && prevFrame.dataset.src === liveUrl) slot.replaceWith(prevFrame);
@@ -155,6 +166,8 @@ function render(container, state) {
 function renderApproval(slot, j) {
   const a = j.approval;
   if (a.kind === 'order_match') return renderMatch(slot, j);
+  if (a.kind === 'basket_plan') return renderPlan(slot, j);
+  if (a.kind === 'cart_diff') return renderCartDiff(slot, j);
   if (a.kind !== 'form_review') return;
   slot.innerHTML = `
   <div class="card approval" data-at="${esc(a.askedAt)}">
@@ -191,6 +204,7 @@ function renderResult(slot, j) {
   if (r.error) { slot.innerHTML = `<div class="summary"><span class="badge bad">Error</span> ${esc(r.error)}</div>`; return; }
   if (j.type === 'price_hunt') return renderPrice(slot, j, r);
   if (j.type === 'order') return renderOrderResult(slot, j, r);
+  if (j.type === 'jhola') return renderCarts(slot, j, r);
   if (j.type === 'form_fill') {
     const good = r.status === 'done';
     slot.innerHTML = `<div class="card">
@@ -215,7 +229,6 @@ function renderPrice(slot, j, r) {
       ${b.offers?.length ? `<ul class="clean small">${b.offers.slice(0, 3).map((o) => `<li>${esc(o)}</li>`).join('')}</ul>` : ''}
       <div class="actions" style="justify-content:flex-start">
         <button class="primary" data-buy>Buy at ${esc(b.domain)}…</button>
-        <button data-watch-price>👀 Watch this price</button>
         <button data-rerun>↻ Check again</button>
       </div>
     </div>
@@ -237,13 +250,6 @@ function renderPrice(slot, j, r) {
       `<p><b>${esc(b.product_name)}</b><br>${money(b.price, b.currency)} · checked ${new Date(j.finishedAt || Date.now()).toLocaleTimeString()}</p>
        <p>Errand doesn't pay for you, and it never sees your card or login. I'll open the listing in a new tab so <b>you</b> can check the final price and check out.</p>`, 'Open store');
     if (ok) window.open(b.url, '_blank', 'noopener');
-  });
-  $('[data-watch-price]', slot)?.addEventListener('click', async () => {
-    try {
-      await api('/api/watches', { method: 'POST', body: { kind: 'page', url: b.url, name: `${r.product} @ ${b.domain}`.slice(0, 100), schedule: 'every6h',
-        purpose: `The selling price of ${r.product} changes from ${money(b.price, b.currency)}${r.target ? `, especially if it drops to ${money(r.target, b.currency)} or below` : ''}, or it goes out of stock` } });
-      toast('Watching this price every 6 hours. See the Watch tab.');
-    } catch (e) { toast(e.message); }
   });
   $('[data-rerun]', slot)?.addEventListener('click', () => rerun(j.id, slot.closest('.panel').querySelector('[id$=Run]')));
 }
@@ -280,78 +286,6 @@ formForm.addEventListener('submit', async (e) => {
 $$('[data-fill-form]').forEach((b) => b.addEventListener('click', () => {
   const v = JSON.parse(b.dataset.fillForm); for (const [k, val] of Object.entries(v)) formForm[k].value = val;
 }));
-
-// ---------- Watch ----------
-const watchForm = $('#watchForm');
-let watchKind = 'page';
-function setKind(k) {
-  watchKind = k;
-  $$('#watchKind button').forEach((b) => b.classList.toggle('on', b.dataset.kind === k));
-  $$('.kind-page').forEach((el) => el.classList.toggle('hidden', k !== 'page'));
-  $$('.kind-topic').forEach((el) => el.classList.toggle('hidden', k !== 'topic'));
-}
-$$('#watchKind button').forEach((b) => b.addEventListener('click', () => setKind(b.dataset.kind)));
-$$('[data-watch]').forEach((b) => b.addEventListener('click', () => {
-  const v = JSON.parse(b.dataset.watch); watchForm.reset(); setKind(v.kind);
-  for (const [k, val] of Object.entries(v)) if (watchForm[k]) watchForm[k].value = val;
-}));
-watchForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const btn = $('button[type=submit]', watchForm); btn.disabled = true; btn.textContent = 'Taking a baseline…';
-  try {
-    const res = await api('/api/watches', { method: 'POST', body: { kind: watchKind, ...formData(watchForm) } });
-    const bl = res.baseline;
-    $('#watchResult').innerHTML = `<div class="card" style="margin-top:14px"><div class="summary good">✅ Watching <b>${esc(res.monitor.name)}</b>. Baseline captured. I'll compare every check against it.</div>
-      ${bl?.preview ? `<div class="diff">${esc(bl.preview)}…</div>` : ''}
-      ${bl?.items ? `<ul class="clean small">${bl.items.map((i) => `<li><a href="${esc(safeUrl(i.url))}" target="_blank" rel="noopener">${esc(i.title)}</a></li>`).join('')}</ul>` : ''}</div>`;
-    watchForm.reset(); setKind('page'); loadWatches();
-  } catch (err) { toast(err.message); }
-  btn.disabled = false; btn.textContent = 'Start watching →';
-});
-
-const SCHED = { '0 * * * *': 'Every hour', '0 */6 * * *': 'Every 6 hours', 'CRON_TZ=Asia/Kolkata 0 9 * * *': 'Daily 9am IST', 'CRON_TZ=Asia/Kolkata 0 9 * * 1-5': 'Weekdays 9am IST', 'CRON_TZ=Asia/Kolkata 0 9 * * 1': 'Mondays 9am IST' };
-async function loadWatches() {
-  const list = $('#watchList');
-  try {
-    const ws = await api('/api/watches');
-    if (!ws.length) { list.innerHTML = '<div class="card small">No watches yet. Try a preset above.</div>'; return; }
-    list.innerHTML = ws.map((w) => `<div class="card watch" data-id="${esc(w.id)}">
-      <h4>${esc(w.name)}</h4>
-      <div class="small">${w.type === 'fetch' ? '📄 Page' : '🔎 Topic'} · ${esc(SCHED[w.schedule_cron] || w.schedule_cron)} · <span class="badge ${w.status === 'active' ? 'good' : 'warn'}">${esc(w.status)}</span></div>
-      ${w.purpose ? `<div class="small">Looking for: ${esc(w.purpose)}</div>` : ''}
-      <div class="small">${w.type === 'fetch' ? `<a href="${esc(safeUrl(w.config?.url))}" target="_blank" rel="noopener">${esc(w.config?.url)}</a>` : `“${esc(w.config?.query)}”`}</div>
-      ${w.last_error ? `<div class="small"><span class="badge bad">Last error</span> ${esc(w.last_error)}</div>` : ''}
-      <div class="small">Last checked here: ${ago(w.lastCheckedAt)}</div>
-      <div class="row"><button class="primary" data-check>Check now</button><button data-pause>${w.status === 'paused' ? 'Resume' : 'Pause'}</button><button class="danger ghost" data-del>Delete</button></div>
-      <div class="check-out"></div></div>`).join('');
-    $$('.watch', list).forEach((card) => {
-      const id = card.dataset.id; const w = ws.find((x) => x.id === id);
-      $('[data-check]', card).onclick = async (e) => {
-        e.target.disabled = true; e.target.textContent = 'Checking…';
-        try { renderCheck($('.check-out', card), await api(`/api/watches/${id}/check`, { method: 'POST' })); }
-        catch (err) { toast(err.message); }
-        e.target.disabled = false; e.target.textContent = 'Check now';
-      };
-      $('[data-pause]', card).onclick = async () => { await api(`/api/watches/${id}`, { method: 'PATCH', body: { paused: w.status !== 'paused' } }); loadWatches(); };
-      $('[data-del]', card).onclick = async () => {
-        if (await confirmBox('Delete this watch?', `<p>“${esc(w.name)}” and its schedule will be removed permanently.</p>`, 'Delete')) { await api(`/api/watches/${id}`, { method: 'DELETE' }); loadWatches(); }
-      };
-    });
-  } catch (err) { list.innerHTML = `<div class="card small">Couldn't load watches: ${esc(err.message)}</div>`; }
-}
-function renderCheck(el, r) {
-  const c = r.change;
-  if (r.monitor.type === 'fetch') {
-    el.innerHTML = !r.since ? '<div class="small" style="margin-top:8px">First check from this computer. Saved as the new comparison point.</div>'
-      : !c.changed ? `<div class="small" style="margin-top:8px"><span class="badge good">No change</span> since ${ago(r.since)}</div>`
-      : `<div style="margin-top:8px"><span class="badge warn">Changed</span> <span class="small">since ${ago(r.since)}</span>
-         <div class="diff">${c.added.map((l) => `<div class="add">+ ${esc(l)}</div>`).join('')}${c.removed.slice(0, 10).map((l) => `<div class="del">− ${esc(l)}</div>`).join('')}</div></div>`;
-  } else {
-    el.innerHTML = !r.since ? '<div class="small" style="margin-top:8px">First check from this computer. Saved as the new comparison point.</div>'
-      : !c.newItems.length ? `<div class="small" style="margin-top:8px"><span class="badge good">Nothing new</span> since ${ago(r.since)}</div>`
-      : `<div style="margin-top:8px"><span class="badge warn">${c.newItems.length} new</span><ul class="clean small">${c.newItems.map((i) => `<li><a href="${esc(safeUrl(i.url))}" target="_blank" rel="noopener">${esc(i.title)}</a></li>`).join('')}</ul></div>`;
-  }
-}
 
 // ---------- History ----------
 async function loadHistory() {
@@ -517,9 +451,253 @@ $('#careSave').onclick = async () => {
   } catch (e) { toast(e.message); }
 };
 
+// ---------- Jhola: list → live panels → plan → carts ----------
+let accountsCache = [];
+async function loadAccounts() { try { accountsCache = await api('/api/accounts'); } catch { accountsCache = []; } return accountsCache; }
+const acct = (app) => accountsCache.find((a) => a.app === app) || {};
+const rs = (n) => (n == null ? '—' : `₹${Math.round(n).toLocaleString('en-IN')}`);
+const qtyLabel = (i) => (i.unit === 'g' ? (i.quantity >= 1000 ? `${+(i.quantity / 1000).toFixed(2)} kg` : `${i.quantity} g`) : i.unit === 'ml' ? (i.quantity >= 1000 ? `${+(i.quantity / 1000).toFixed(2)} L` : `${i.quantity} ml`) : `× ${i.quantity}`);
+
+const jForm = $('#jForm');
+let jItems = [];
+let jApps = [...APPS];
+let jTimer;
+async function jParse() {
+  const text = jForm.text.value.trim();
+  if (!text) { jItems = []; renderItems(); return; }
+  const { items } = await api('/api/jhola/parse', { method: 'POST', body: { text } });
+  // Keep edits the user made to items that still exist.
+  const old = new Map(jItems.map((i) => [i.raw, i]));
+  jItems = items.map((i) => (old.get(i.raw)?.edited ? old.get(i.raw) : i));
+  renderItems();
+}
+function renderItems() {
+  const box = $('#jItems');
+  if (!jItems.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="items-edit"><div class="irow irow-head"><span>Item</span><span>Qty</span><span>Unit</span><span class="bw">Brand</span><span></span><span></span></div>
+    ${jItems.map((i, k) => `<div class="irow" data-k="${k}">
+      <input data-f="name" value="${esc(i.name)}" title="from “${esc(i.raw)}”">
+      <input data-f="quantity" type="number" min="1" value="${esc(i.quantity)}">
+      <select data-f="unit">${['pc', 'g', 'ml'].map((u) => `<option ${u === i.unit ? 'selected' : ''}>${u}</option>`).join('')}</select>
+      <input class="bw" data-f="brand" placeholder="any brand" value="${esc(i.brand || '')}">
+      <label class="nosub" title="Only this exact product"><input type="checkbox" data-f="nosub" ${i.allowSubstitute ? '' : 'checked'}> no subs</label>
+      <button type="button" class="ghost x" data-del title="Remove">✕</button></div>`).join('')}</div>`;
+  $$('.irow[data-k]', box).forEach((row) => {
+    const it = jItems[row.dataset.k];
+    $$('[data-f]', row).forEach((el) => el.addEventListener('input', () => {
+      const f = el.dataset.f; it.edited = true;
+      if (f === 'nosub') it.allowSubstitute = !el.checked;
+      else if (f === 'quantity') it.quantity = Number(el.value) || 1;
+      else if (f === 'brand') it.brand = el.value.trim().toLowerCase() || null;
+      else it[f] = el.value;
+    }));
+    $('[data-del]', row).onclick = () => { jItems.splice(row.dataset.k, 1); renderItems(); };
+  });
+}
+function renderAppToggles() {
+  const any = accountsCache.some((a) => a.connected && !a.expired);
+  $('#jNeedSetup').classList.toggle('hidden', any);
+  $('#jApps').innerHTML = APPS.map((a) => {
+    const ac = acct(a);
+    return `<span class="apptog ${jApps.includes(a) ? 'on' : ''}" data-app="${a}" title="${ac.connected ? (ac.expired ? 'Login expired' : 'Connected') : 'Not connected — prices by PIN code only'}"><span class="d ${ac.connected ? (ac.expired ? 'exp' : 'ok') : ''}"></span>${APP_NAMES[a]}</span>`;
+  }).join('');
+  $$('#jApps .apptog').forEach((t) => t.onclick = () => {
+    const a = t.dataset.app;
+    jApps = jApps.includes(a) ? jApps.filter((x) => x !== a) : [...jApps, a];
+    renderAppToggles();
+  });
+}
+jForm.text.addEventListener('input', () => { clearTimeout(jTimer); jTimer = setTimeout(jParse, 300); });
+$$('#jExamples button').forEach((b) => b.addEventListener('click', () => { jForm.text.value = b.textContent; jItems = []; jParse(); }));
+jForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!jItems.length) await jParse();
+  if (!jItems.length) return toast('Type your list first.');
+  if (!jApps.length) return toast('Pick at least one app.');
+  if (!profile.pincode && !accountsCache.some((a) => a.connected)) { toast('Add your PIN code in Me (or connect an app in Setup).'); return show('me'); }
+  try {
+    const { id } = await api('/api/jhola', { method: 'POST', body: { items: jItems.map(({ edited, raw, ...i }) => i), apps: jApps } });
+    try { localStorage.setItem('jhola:last', id); } catch {}
+    mountRun($('#jRun'), id);
+  } catch (err) { toast(err.message); }
+});
+async function resumeJhola() {
+  let id; try { id = localStorage.getItem('jhola:last'); } catch {}
+  if (!id) return;
+  try { const j = await api(`/api/jobs/${id}`); if (['running', 'awaiting_approval'].includes(j.status) || Date.now() - j.createdAt < 3600e3) mountRun($('#jRun'), id); } catch {}
+}
+
+// Three live panels, one per app.
+const STATE_LABEL = { queued: 'Queued', searching: 'Searching…', scanning: 'Browser scan…', done: 'Done', logged_out: 'Logged out', unavailable: 'Unavailable' };
+function panelsHtml(j, state, finished) {
+  const b = j.basket;
+  return `<div class="panels">${b.apps.map((app) => {
+    const name = APP_NAMES[app];
+    const st = b.status?.[app] || {};
+    const live = !finished && (state.live.get(`${name} cart`) || state.live.get(name));
+    const last = [...j.events].reverse().find((e) => e.tag === name || e.tag === `${name} cart`);
+    const chip = { done: 'done', logged_out: 'failed', unavailable: 'failed', searching: 'running', scanning: 'running' }[st.state] || '';
+    return `<div class="card apanel"><div class="ph"><b>${name}</b><span class="chip ${chip}">${esc(STATE_LABEL[st.state] || st.state || '')}</span></div>
+      ${live ? `<div class="pframe" data-src="${esc(live)}"></div>` : `<div class="scr">${st.state === 'done' ? `✅ Found ${st.found}/${b.items.length} items${st.address ? `<br><span class="small">📍 ${esc(st.address)}</span>` : ''}${st.loggedIn === false ? '<br><span class="small">(not logged in — PIN-code prices)</span>' : ''}` : esc(st.note || (finished ? '' : 'Waiting for the browser…'))}</div>`}
+      <div class="pl">${esc(last?.msg?.replace(/^.*?: /, '') || '')}</div></div>`;
+  }).join('')}</div>`;
+}
+
+// Plan page: optimised basket with swap / drop / force-one-app; totals update instantly.
+function renderPlan(slot, j) {
+  const a = j.approval;
+  const ps = { choice: {}, pinned: {}, dropped: [], onlyApps: null, fees: structuredClone(a.fees) };
+  // A persistent root: the run view re-renders often and re-uses this node, so redraws target it, not the slot.
+  const root = document.createElement('div');
+  root.className = 'card approval'; root.dataset.at = a.askedAt;
+  slot.replaceChildren(root);
+  const draw = () => {
+    const r = optimise({ items: a.items, offers: a.offers, fees: ps.fees, apps: a.apps, choice: ps.choice, pinned: ps.pinned, dropped: ps.dropped, onlyApps: ps.onlyApps });
+    const p = r.best;
+    if (!p) { root.innerHTML = 'Nothing could be planned with these choices. <button data-reset>Reset</button>'; $('[data-reset]', root).onclick = () => { Object.assign(ps, { choice: {}, pinned: {}, dropped: [], onlyApps: null }); draw(); }; return; }
+    const lineOf = Object.fromEntries(p.lines.map((l) => [l.itemId, l]));
+    const subs = p.lines.filter((l) => l.offer.matchKind !== 'exact');
+    root.innerHTML = `
+      <div class="plan-sum"><div><div class="small">Your cheapest basket</div>
+        <div class="big">${p.apps.map((x) => APP_NAMES[x]).join(' + ')}, ${rs(p.total)} <span class="small">incl. fees</span></div>
+        <div class="small">${r.bestSingle && r.bestSingle.apps.join() !== p.apps.join() ? `Best single app is ${APP_NAMES[r.bestSingle.apps[0]]} at ${rs(r.bestSingle.total)}.` : r.bestSingle ? 'One app is the cheapest here.' : 'No single app has everything.'}</div></div>
+        ${r.savings > 0 ? `<span class="save">You save ${rs(r.savings)}</span>` : ''}</div>
+      <div class="modes"><button data-mode="" class="${!ps.onlyApps ? 'on' : ''}">Best mix</button>${a.apps.map((x) => `<button data-mode="${x}" class="${ps.onlyApps?.[0] === x ? 'on' : ''}">${APP_NAMES[x]} only</button>`).join('')}</div>
+      <div class="tbl-wrap"><table class="ptable"><thead><tr><th>Item</th><th>App</th><th>Product</th><th>Packs</th><th>Total</th><th>Change</th></tr></thead><tbody>
+      ${a.items.map((it) => {
+        const l = lineOf[it.id]; const dropped = ps.dropped.includes(it.id);
+        const opts = a.apps.flatMap((app) => (a.offers[it.id]?.[app] || []).map((o, k) => ({ app, k, o })));
+        if (!l) return `<tr class="${dropped ? 'dropped' : ''}"><td><b>${esc(it.name)}</b><div class="small">${qtyLabel(it)}</div></td><td colspan="4">${dropped ? 'Dropped' : '<span class="badge bad">Not available</span>'}</td><td><button data-drop="${esc(it.id)}">${dropped ? 'Restore' : 'Drop'}</button></td></tr>`;
+        const o = l.offer;
+        return `<tr><td><b>${esc(it.name)}</b><div class="small">${qtyLabel(it)}${it.brand ? ` · ${esc(it.brand)}` : ''}</div></td>
+          <td><span class="appb">${APP_NAMES[l.app]}</span></td>
+          <td>${esc(o.productName)}<div class="small">${esc(o.packLabel)} · ${rs(o.price)} · ${esc(o.unitPrice)}${o.source === 'scan' ? ' · scan' : ''}</div>
+            ${o.matchKind === 'substitute' ? '<span class="badge warn">Substitute</span>' : o.matchKind === 'size_variant' ? '<span class="badge warn">Different size</span>' : ''}</td>
+          <td class="num">${l.packs}</td><td class="num">${rs(o.lineCost)}</td>
+          <td><select data-swap="${esc(it.id)}">${opts.map(({ app, k, o: c }) => `<option value="${app}|${k}" ${app === l.app && c === o ? 'selected' : ''}>${APP_NAMES[app]} · ${esc(c.productName.slice(0, 34))} ${esc(c.packLabel)} · ${rs(c.lineCost)}${c.matchKind !== 'exact' ? ' *' : ''}</option>`).join('')}</select>
+            <button class="ghost" data-drop="${esc(it.id)}">Drop</button></td></tr>`;
+      }).join('')}</tbody></table></div>
+      <h4>Fees by app</h4>
+      <div class="feegrid">${p.apps.map((x) => { const f = p.feesByApp[x]; const rule = ps.fees[x] || {}; return `<div class="fee"><b>${APP_NAMES[x]}</b> <span class="small">(${esc(rule.source || 'estimate')})</span>
+        <div class="r"><span>Items</span><span>${rs(f.subtotal)}</span></div><div class="r"><span>Delivery</span><span>${rs(f.delivery)}</span></div>
+        <div class="r"><span>Handling</span><span>${rs(f.handling)}</span></div>${f.smallCart ? `<div class="r"><span>Small cart</span><span>${rs(f.smallCart)}</span></div>` : ''}${f.other ? `<div class="r"><span>Other</span><span>${rs(f.other)}</span></div>` : ''}
+        <div class="r t"><span>Total</span><span>${rs(f.subtotal + f.total)}</span></div>
+        <details><summary class="small">Edit fees</summary><div class="fee-edit">${[['deliveryFee', 'Delivery'], ['freeDeliveryAbove', 'Free above'], ['handlingFee', 'Handling'], ['smallCartFee', 'Small cart fee'], ['smallCartThreshold', 'Small cart below']].map(([k, lab]) => `<label class="small">${lab}<input type="number" min="0" data-fee="${x}|${k}" value="${esc(rule[k] ?? 0)}"></label>`).join('')}</div></details></div>`; }).join('')}</div>
+      ${subs.length ? `<p class="small">⚠️ ${subs.length} item(s) are a substitute or a different size. Approving accepts them.</p>` : ''}
+      <div class="actions"><button class="danger" data-cancel>Cancel</button><button class="primary big" data-approve>Approve & fill carts →</button></div>`;
+    $$('[data-mode]', root).forEach((b) => b.onclick = () => { ps.onlyApps = b.dataset.mode ? [b.dataset.mode] : null; draw(); });
+    $$('[data-drop]', root).forEach((b) => b.onclick = () => { const id = b.dataset.drop; ps.dropped = ps.dropped.includes(id) ? ps.dropped.filter((x) => x !== id) : [...ps.dropped, id]; draw(); });
+    $$('[data-swap]', root).forEach((s) => s.onchange = () => { const [app, k] = s.value.split('|'); const id = s.dataset.swap; ps.pinned[id] = app; ps.choice[id] = { ...(ps.choice[id] || {}), [app]: Number(k) }; if (ps.onlyApps && !ps.onlyApps.includes(app)) ps.onlyApps = null; draw(); });
+    $$('[data-fee]', root).forEach((inp) => inp.onchange = () => { const [x, k] = inp.dataset.fee.split('|'); ps.fees[x] = { ...ps.fees[x], [k]: Number(inp.value) || 0, source: 'edited by you' }; draw(); });
+    $('[data-cancel]', root).onclick = () => api(`/api/jobs/${j.id}/approve`, { method: 'POST', body: { approved: false } });
+    $('[data-approve]', root).onclick = async () => {
+      const ok = await confirmBox('Fill these carts?', `<p>I'll fill <b>${p.apps.map((x) => APP_NAMES[x]).join(' and ')}</b> with ${p.lines.length} item(s), planned total <b>${rs(p.total)}</b>.</p>
+        <p>⚠️ Anything already in those carts will be <b>removed first</b>.</p><p class="small">I stop on the cart page. I never press Pay or Place order. You pay in the app.</p>`, 'Yes, fill carts');
+      if (!ok) return;
+      api(`/api/jobs/${j.id}/approve`, { method: 'POST', body: { approved: true, data: { plan: { apps: p.apps, total: p.total, lines: p.lines.map((l) => ({ itemId: l.itemId, app: l.app, productName: l.offer.productName, packs: l.packs })) }, fees: ps.fees } } });
+    };
+  };
+  draw();
+}
+
+function renderCartDiff(slot, j) {
+  const a = j.approval;
+  slot.innerHTML = `<div class="card approval" data-at="${esc(a.askedAt)}"><h3>⚠️ The cart total isn't what I planned</h3>
+    ${a.carts.map((c) => `<p><b>${APP_NAMES[c.app]}</b>: planned ${rs(c.planned)}, the app now says <b>${rs(c.actual)}</b> (${c.diff > 0 ? '+' : ''}${rs(c.diff)}).</p>`).join('')}
+    <p class="small">Prices or fees changed since I checked. Do you still want to go ahead and pay?</p>
+    <div class="actions"><button data-no>Don't pay yet</button><button class="primary" data-yes>Yes, continue to payment</button></div></div>`;
+  $('[data-no]', slot).onclick = () => api(`/api/jobs/${j.id}/approve`, { method: 'POST', body: { approved: false } });
+  $('[data-yes]', slot).onclick = () => api(`/api/jobs/${j.id}/approve`, { method: 'POST', body: { approved: true } });
+}
+
+function renderCarts(slot, j, r) {
+  if (!r.carts) { slot.innerHTML = `<div class="summary">ℹ️ ${esc(r.message)} ${/Setup/.test(r.message || '') ? '<a href="#setup">Open Setup →</a>' : ''}</div>`; return; }
+  slot.innerHTML = `<div class="summary ${r.status === 'done' ? 'good' : ''}">${r.status === 'done' ? '🛍️' : 'ℹ️'} ${esc(r.message)}</div>
+  <div class="grid3">${r.carts.map((c) => {
+    const name = APP_NAMES[c.app];
+    if (c.state !== 'filled') return `<div class="card cartcard"><h3>${name}</h3><p>${esc(c.message)}</p>${/Setup/.test(c.message) ? '<a href="#setup"><button>Open Setup</button></a>' : ''}</div>`;
+    const k = c.cart; const off = c.diff != null && Math.abs(c.diff) > 10;
+    return `<div class="card cartcard"><h3>${name} cart</h3>
+      ${k.removed_existing ? '<p class="small">I removed items that were already in this cart.</p>' : ''}
+      <table><tbody>${k.lines.map((l) => `<tr><td>${esc(l.name)} <span class="small">${esc(l.pack || '')}</span></td><td class="num">×${l.qty}</td><td class="num">${rs(l.price)}</td></tr>`).join('')}</tbody></table>
+      <div class="fee" style="margin-top:10px"><div class="r"><span>Items</span><span>${rs(k.item_total)}</span></div><div class="r"><span>Delivery</span><span>${rs(k.delivery_fee)}</span></div><div class="r"><span>Handling</span><span>${rs(k.handling_fee)}</span></div>${k.small_cart_fee ? `<div class="r"><span>Small cart</span><span>${rs(k.small_cart_fee)}</span></div>` : ''}${k.other_fees ? `<div class="r"><span>Other</span><span>${rs(k.other_fees)}</span></div>` : ''}
+        <div class="r t"><span>To pay</span><span class="tot">${rs(c.actual)}</span></div></div>
+      <p class="small">Planned ${rs(c.planned)} ${off ? `<span class="badge warn">${c.diff > 0 ? '+' : ''}${rs(c.diff)} different</span>` : '<span class="badge good">matches</span>'}</p>
+      ${k.missing?.length ? `<p class="small"><span class="badge bad">Missing</span> ${k.missing.map(esc).join(', ')}</p>` : ''}
+      <div class="row" style="flex-wrap:wrap"><button class="primary" data-pay="${c.app}">Pay on ${name} →</button></div>
+      <p class="small">Opens your logged-in ${name} so <b>you</b> pay with your own UPI. You can also open the ${name} app on your phone; the cart is on your account.</p></div>`;
+  }).join('')}</div>`;
+  $$('[data-pay]', slot).forEach((b) => b.onclick = () => openWindow(b.dataset.pay, 'pay'));
+}
+
+// ---------- Setup + the remote window (login once / pay yourself) ----------
+async function loadSetup() {
+  await loadAccounts();
+  $('#setupApps').innerHTML = accountsCache.map((a) => `<div class="card appcard"><h3>${esc(a.name)}</h3>
+    <div>${a.connected ? (a.expired ? '<span class="badge warn">Login expired</span>' : '<span class="badge good">Connected</span>') : '<span class="badge">Not connected</span>'}</div>
+    <div class="small">${a.connectedAt ? `Saved ${new Date(a.connectedAt).toLocaleString()}` : 'Log in with your phone number + OTP.'}</div>
+    <div class="row"><button class="primary" data-open="${a.app}">${a.connected ? 'Reconnect' : 'Connect'}</button>${a.connected ? `<button class="ghost danger" data-disc="${a.app}">Disconnect</button>` : ''}</div></div>`).join('');
+  $$('[data-open]').forEach((b) => b.onclick = () => openWindow(b.dataset.open, 'login'));
+  $$('[data-disc]').forEach((b) => b.onclick = async () => { if (await confirmBox('Disconnect?', `<p>This deletes the saved ${esc(APP_NAMES[b.dataset.disc])} login from TinyFish.</p>`, 'Disconnect')) { await api(`/api/accounts/${b.dataset.disc}`, { method: 'DELETE' }); loadSetup(); } });
+}
+
+let win = null;
+async function openWindow(app, purpose) {
+  const d = $('#win');
+  $('#winTitle').textContent = purpose === 'pay' ? `Pay on ${APP_NAMES[app]} (you pay, not Jhola)` : `Log in to ${APP_NAMES[app]}`;
+  $('#winHint').textContent = purpose === 'pay' ? 'Open the cart and pay with your own UPI. Jhola does not click anything here.' : 'Tap Login, enter your phone number and OTP, and check your delivery address. Then Save & close.';
+  $('#winImg').removeAttribute('src');
+  d.showModal();
+  try {
+    const s = await api(`/api/accounts/${app}/open`, { method: 'POST', body: { purpose } });
+    win = { ...s, app, alive: true };
+    const loop = async () => {
+      if (!win?.alive) return;
+      try {
+        const res = await fetch(`/api/accounts/window/${win.sessionId}/frame`);
+        if (res.ok) {
+          const url = URL.createObjectURL(await res.blob());
+          const img = $('#winImg'); const old = img.src; img.src = url; if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+          $('#winUrl').textContent = decodeURI(res.headers.get('X-Page-Url') || '');
+        } else if (res.status === 410) { win.alive = false; toast('The window expired.'); d.close(); return; }
+      } catch {}
+      setTimeout(loop, 700);
+    };
+    loop();
+  } catch (e) { toast(e.message); d.close(); }
+}
+const send = (ev) => win?.alive && api(`/api/accounts/window/${win.sessionId}/input`, { method: 'POST', body: ev }).catch(() => {});
+$('#winImg').addEventListener('click', (e) => {
+  const r = e.target.getBoundingClientRect();
+  send({ type: 'click', x: Math.round(((e.clientX - r.left) / r.width) * (win?.width || 1000)), y: Math.round(((e.clientY - r.top) / r.height) * (win?.height || 700)) });
+  e.target.focus();
+});
+$('#winImg').addEventListener('wheel', (e) => { e.preventDefault(); send({ type: 'scroll', dy: e.deltaY }); }, { passive: false });
+$('#winImg').addEventListener('keydown', (e) => {
+  if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) { e.preventDefault(); send({ type: 'type', text: e.key }); }
+  else if (['Enter', 'Backspace', 'Tab', 'Escape', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Delete'].includes(e.key)) { e.preventDefault(); send({ type: 'key', key: e.key }); }
+});
+$('#winSend').onclick = () => { const t = $('#winText').value; if (t) { send({ type: 'type', text: t }); $('#winText').value = ''; } };
+$('#winText').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#winSend').click(); } });
+$$('#win [data-key]').forEach((b) => b.onclick = () => send({ type: 'key', key: b.dataset.key }));
+$$('#win [data-scroll]').forEach((b) => b.onclick = () => send({ type: 'scroll', dy: Number(b.dataset.scroll) }));
+$('#win [data-back]').onclick = () => send({ type: 'back' });
+async function closeWin(save) {
+  const d = $('#win');
+  if (!win) return d.close();
+  const w = win; win = { ...w, alive: false };
+  try { const r = await api(`/api/accounts/window/${w.sessionId}/close`, { method: 'POST', body: { save } }); if (save) toast(`${APP_NAMES[w.app]} saved${r.cookies ? ` (${r.cookies} cookies)` : ''} 🧡`); } catch (e) { toast(e.message); }
+  win = null; d.close(); loadSetup(); loadAccounts().then(renderAppToggles);
+}
+$('#winSave').onclick = () => closeWin(true);
+$('#winCancel').onclick = () => closeWin(false);
+$('#win').addEventListener('cancel', (e) => { e.preventDefault(); closeWin(false); });
+
 // ---------- boot ----------
 loadStatus();
 await loadSettings().catch(() => {});
 await loadMe().catch(() => {});
-show((location.hash || '#order').slice(1) || 'order');
-window.addEventListener('hashchange', () => show(location.hash.slice(1) || 'order'));
+await loadAccounts(); renderAppToggles();
+show((location.hash || '#jhola').slice(1) || 'jhola');
+window.addEventListener('hashchange', () => show(location.hash.slice(1) || 'jhola'));
+resumeJhola();
