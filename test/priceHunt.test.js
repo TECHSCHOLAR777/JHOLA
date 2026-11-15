@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-process.env.ERRAND_DATA_DIR = new URL('../data-test', import.meta.url).pathname;
+import { fileURLToPath } from 'node:url';
+process.env.JHOLA_DATA_DIR = fileURLToPath(new URL('../data-test', import.meta.url));
 const { parseStores, resolveStore, matchScore } = await import('../lib/chores/priceHunt.js');
 const { isSensitiveField, detectBlock } = await import('../lib/safety.js');
 

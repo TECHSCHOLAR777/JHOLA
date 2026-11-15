@@ -174,7 +174,7 @@ function renderApproval(slot, j) {
     <h3>✋ Review before anything is sent: ${esc(a.title)}</h3>
     <p class="small">${esc(a.message)} <a href="${esc(safeUrl(a.url))}" target="_blank" rel="noopener">Open form ↗</a></p>
     ${a.blockers?.length ? `<p><span class="badge warn">Heads up</span> ${a.blockers.map(esc).join(' · ')}</p>` : ''}
-    <div class="tbl-wrap"><table class="fields"><thead><tr><th>Field</th><th>Value Errand will enter</th><th>Source</th></tr></thead><tbody>
+    <div class="tbl-wrap"><table class="fields"><thead><tr><th>Field</th><th>Value Jhola will enter</th><th>Source</th></tr></thead><tbody>
     ${a.fields.map((f, i) => `<tr class="${f.locked ? 'locked' : ''}">
       <td>${esc(f.label)} ${f.required ? '<span class="req">*</span>' : ''}<div class="small">${esc(f.type)}</div></td>
       <td>${f.locked ? `<span class="badge bad">🔒 ${esc(f.note)}</span>` :
@@ -191,7 +191,7 @@ function renderApproval(slot, j) {
     const filled = fields.filter((f) => f.value);
     const missing = fields.filter((f) => f.required && !f.locked && !f.value);
     const ok = await confirmBox('Submit this form?',
-      `<p>Errand will type <b>${filled.length}</b> value(s) into <b>${esc(a.title)}</b> and press <b>${esc(a.submitLabel || 'Submit')}</b> once.</p>
+      `<p>Jhola will type <b>${filled.length}</b> value(s) into <b>${esc(a.title)}</b> and press <b>${esc(a.submitLabel || 'Submit')}</b> once.</p>
        ${missing.length ? `<p><span class="badge warn">${missing.length} required field(s) empty</span> the site may reject it: ${missing.map((m) => esc(m.label)).join(', ')}</p>` : ''}
        <p class="small">It stops before any payment, login or CAPTCHA.</p>`, 'Yes, submit');
     if (ok) api(`/api/jobs/${j.id}/approve`, { method: 'POST', body: { approved: true, data: { fields } } });
@@ -248,7 +248,7 @@ function renderPrice(slot, j, r) {
   $('[data-buy]', slot)?.addEventListener('click', async () => {
     const ok = await confirmBox(`Buy at ${b.domain}?`,
       `<p><b>${esc(b.product_name)}</b><br>${money(b.price, b.currency)} · checked ${new Date(j.finishedAt || Date.now()).toLocaleTimeString()}</p>
-       <p>Errand doesn't pay for you, and it never sees your card or login. I'll open the listing in a new tab so <b>you</b> can check the final price and check out.</p>`, 'Open store');
+       <p>Jhola doesn't pay for you, and it never sees your card or login. I'll open the listing in a new tab so <b>you</b> can check the final price and check out.</p>`, 'Open store');
     if (ok) window.open(b.url, '_blank', 'noopener');
   });
   $('[data-rerun]', slot)?.addEventListener('click', () => rerun(j.id, slot.closest('.panel').querySelector('[id$=Run]')));
