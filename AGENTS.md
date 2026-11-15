@@ -20,7 +20,7 @@ Node ≥ 22, ESM only, no build step, no TypeScript. Express 5 serves `public/` 
 - `lib/jobs.js` — job store, event log, approval gates, persistence to `data/jobs.json`
 - `lib/store.js` — JSON files under `JHOLA_DATA_DIR` (default `data/`, gitignored)
 - `lib/chores/` — side features (Order, Compare, Forms); secondary to the basket flow
-- `docs/DIAGNOSIS.md` — audit of known bugs and the upgrade backlog; check it before fixing something
+- `docs/` — `DECISIONS.md` (why), `ROADMAP.md` (what next), `DIAGNOSIS.md` (known bugs), `PROJECT.md` and `SPEC-2026-10-14.md` (original pitch and design)
 
 ## Rules that must not break
 
