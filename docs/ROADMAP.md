@@ -6,7 +6,7 @@ Ideas from the original pitch (`docs/PROJECT.md`), the 14-Oct design spec (`docs
 
 | Work | Branch |
 | --- | --- |
-| Password auth, single active job, cancel, approval timeout, PII and login-window leaks, safe errors | `backend-hardening` |
+| BYOK key sessions with per-user isolation, single active job, cancel, approval timeout, PII and login-window leaks, safe errors | `backend-hardening` |
 | Fee learning, multipacks, parser decimals and fractions, no positional mapping, per-app failure isolation, server-side order-placed guard, list chunking | `basket-engine` |
 | Preact + htm frontend, Basket / Orders / Family, plan cards with sticky Approve, login screen, a11y and contrast | `frontend-rewrite` |
 | Free hosting comparison, Dockerfile, deploy guide | `free-deploy` |
@@ -29,7 +29,7 @@ Ideas from the original pitch (`docs/PROJECT.md`), the 14-Oct design spec (`docs
 - Hindi UI and voice input (`hi-IN`).
 - Own Indian residential proxy (`proxy_config.type: "custom"`) if the TinyFish India pool gets blocked.
 - More apps (BigBasket, JioMart, Flipkart Minutes); the optimiser grows to 2^n subsets.
-- Multi-household accounts. Only after the ledger shows savings beat cost.
+- Family accounts: one caretaker managing several parents under one key.
 
 ## Not planned
 
