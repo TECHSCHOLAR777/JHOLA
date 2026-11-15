@@ -1,6 +1,6 @@
 # Roadmap
 
-Planned in earlier docs (`docs/PROJECT.md` and `docs/SPEC-2026-10-14.md` (recovered from branch `local-master-backup-14-oct`)) and in `DIAGNOSIS.md`, checked against the code on 2026-11-15.
+Ideas from the original pitch (`docs/PROJECT.md`), the 14-Oct design spec (`docs/SPEC-2026-10-14.md`, recovered from branch `local-master-backup-14-oct`) and `DIAGNOSIS.md`, checked against the code on 2026-11-15.
 
 ## In progress (wave 1)
 
